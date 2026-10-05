@@ -1,54 +1,64 @@
-# Tulun
+# Tulun — MSD backend fork
 
-[![license](https://img.shields.io/badge/License-MIT-blue)](https://github.com/raphaelmerx/tulun/blob/main/LICENSE)
-![versions](https://img.shields.io/badge/python-3.12-blue.svg)
+This MSD-controlled fork adapts Tulun's existing English-to-configured-language
+translation and post-editing pipeline into a bounded, authenticated Django API.
+Both model stages use the Governed AI Gateway; no Foundry/Google/Gemini key is
+required. There is no direct-provider fallback in MSD mode.
 
-Transparent and Adaptable Low-resource Machine Translation, through LLM post-editing
+Public upstream: `https://github.com/raphaelmerx/tulun` (MIT).
+Fork base: `e81f7a7291b3d7636818be7c7c35f50811dd0747` (`Update README.md`).
+MSD remote: `https://github.com/msd-emerging-tech/tulun.git` (`tulun-origin`).
+The `upstream` Git remote is preserved locally; cloning does not preserve extra
+remotes, so add it explicitly when needed. No commits or pushes are performed by
+the implementation.
 
-[🎥 Demo video](https://youtu.be/fQFwOxzR4MI) | [🖥️ Live demo (using Bislama)](https://bislama-trans.rapha.dev/) | [📄 Paper](https://arxiv.org/abs/2505.18683)
+## Documents
 
-![Tulun Demo](./demo.gif)
+- [Discovery](docs/discovery.md): original architecture and required changes.
+- [API and operations](docs/backend.md): schema, auth, configuration, local usage,
+  persistence, supply chain, upstream updates, and limitations.
+- [Platform handoff](docs/deployment-contract.md): exact container/runtime contract.
+- [Verification](docs/verification.md): executed checks versus outstanding gates.
 
-## Local installation
+## Quick local checks (Python 3.12)
 
-1. Install Python dependencies:
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install poetry
-poetry install
+pip install poetry==2.2.1
+poetry install --only main --no-root
+python manage.py test --settings=tulun.test_settings
 ```
 
-2. Setup credentials: create a .env file in the root directory and add the following:
+The ordinary suite mocks model requests or runs a local fake compatible endpoint;
+it consumes no real model tokens. Optional PostgreSQL suite:
+
 ```bash
-# for Google Translate (optional)
-GOOGLE_APPLICATION_CREDENTIALS='<credential-file>.json'
-# for Gemini, can also use OpenAI / Anthropic / others, see https://docs.litellm.ai/docs/
-GEMINI_API_KEY='<api-key>'
+TULUN_TEST_DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/tulun_test' \
+  python manage.py test --settings=tulun.test_settings
 ```
 
-3. Run the server:
-```bash
-./manage.py migrate && ./manage.py runserver
+Use only a dedicated disposable test database; Django creates/drops a test database.
+
+## Container contract
+
+```text
+Dockerfile: Dockerfile
+Build context: .
+Internal port: 8000
+Health: GET /api/v1/health
+Readiness: GET /api/v1/ready
+Translation: POST /api/v1/translate
+Migration: python manage.py migrate --noinput
+Startup: gunicorn --config gunicorn.conf.py tulun.wsgi:application
 ```
 
-You can now configure your install (target lang, import glossary, etc.) at http://localhost:8000/admin/. After that, you can access the translation interface at http://localhost:8000/.
+Runtime secrets are external. PostgreSQL must be external to the API container.
+The production image runs as UID/GID 10001, exposes no UI/Admin routes, and has no
+hidden migrations, static serving requirement, host-published-port dependency, or
+internal Caddy/Nginx. Main-Website is not modified. No platform manifest is invented
+before its custom Docker schema is agreed.
 
-## Deployment
-
-1. Install Docker and Docker Compose
-
-2. Setup credentials: create a prod.env file in the root directory and add credentials, similar to example above.
-
-3. Run the server:
-```bash
-docker-compose up -d
-```
-
-Access your server at http://localhost:8008/. Can be deployed behind a reverse proxy like Nginx.
-
-## Evaluation
-
-For evaluations in the paper: see the [eval](./eval/) folder README.
-
-For the in-app eval mode, upload your evaluation set at `/admin/translations/evalrow/`. Upon entering a sentence that is part of the eval set, the app will automatically switch to eval mode.
+Upstream academic material and evaluation notebooks remain under `eval/` (not in
+the production image). Legacy UI and Google/HF/DSPy are development-only, optional
+dependencies; they are not part of the MSD deployment surface.

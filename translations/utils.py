@@ -3,23 +3,13 @@ import html
 import json
 import difflib
 import litellm
-import transformers
 from functools import cached_property
-from google.cloud import translate_v2 as translate
 from typing import List, Literal, Optional, Tuple
 from dataclasses import dataclass
-import spacy
-from tqdm import tqdm
-from dotenv import load_dotenv
-load_dotenv()
-import dspy
+from django.conf import settings
 
 from .models import GlossaryEntry, CorpusEntry, SystemConfiguration
-from .dspy_models import Input, PostEditSignature
-
-nlp = spacy.load('en_core_web_sm')
-
-config = SystemConfiguration.load()
+from .gateway import complete, validate_configuration
 
 @dataclass(frozen=True)
 class Message:
@@ -27,11 +17,13 @@ class Message:
     content: str
 
     @staticmethod
-    def format_query(line: CorpusEntry, google_translated: str) -> 'Message':
+    def format_query(line: CorpusEntry, google_translated: str, configuration=None) -> 'Message':
+        config = configuration or SystemConfiguration.load()
         return Message(role='user', content=f"<English>{line.english_text}\n<{config.target_language_name} MT>{google_translated}</{config.target_language_name} MT>")
     
     @staticmethod
-    def format_response(line: CorpusEntry) -> 'Message':
+    def format_response(line: CorpusEntry, configuration=None) -> 'Message':
+        config = configuration or SystemConfiguration.load()
         return Message(role='assistant', content=f"<{config.target_language_name} (post-edited)>{line.translated_text}</{config.target_language_name} (post-edited)>")
     
     def as_dict(self):
@@ -43,10 +35,9 @@ class Message:
 
 
 class TranslatorMixin:
-    def __init__(self) -> None:
-        # access it now, outside of an async loop
-        self.top_n = config.num_sentences_retrieved
-        self.config = config
+    def __init__(self, configuration=None) -> None:
+        self.config = configuration or SystemConfiguration.load()
+        self.top_n = self.config.num_sentences_retrieved
 
     def load_translation_memory(self):
         filename = self.memory_filename
@@ -61,6 +52,7 @@ class TranslatorMixin:
             json.dump(self._translation_memory, f, indent=2)
 
     async def construct_prompt_post_edit(self, sent: str, sent_mt: str, top_similar_sentences: List[CorpusEntry], glossary_entries: List[GlossaryEntry]) -> List[Message]:
+        config = self.config
         messages = [
             Message(role='system', content=config.translation_prompt),
         ]
@@ -89,6 +81,7 @@ class TranslatorMixin:
         return messages
 
     async def get_post_edited_translation(self, input_text: str, similar_sentences, glossary_entries) -> str:
+        config = self.config
         if config.dspy_config:
             return await self.get_post_edited_translation_dspy(input_text, similar_sentences, glossary_entries)
 
@@ -100,20 +93,18 @@ class TranslatorMixin:
             glossary_entries=glossary_entries,
         )
 
-        response = litellm.completion(
-            model=config.post_editing_model,
-            messages=[m.as_dict() for m in messages],
-            temperature=0.5,
-        )
-
-        response = response.choices[0].message.content
-        final_translation = response.strip()
+        final_translation = self.complete_post_edit([message.as_dict() for message in messages])
         return {
             "final_translation": final_translation,
             "corrections": Correction.from_string_matching(sent_mt, final_translation),
         }
 
     async def get_post_edited_translation_dspy(self, input_text: str, similar_sentences: List[CorpusEntry], glossary_entries: List[GlossaryEntry]) -> str:
+        if settings.TULUN_MODE != 'development':
+            raise RuntimeError('Legacy providers require development mode.')
+        import dspy
+        from .dspy_models import Input, PostEditSignature
+        config = self.config
 
         predictor = dspy.Predict(PostEditSignature)
         predictor.load_state(json.loads(config.dspy_config))
@@ -134,9 +125,45 @@ class TranslatorMixin:
             "corrections": Correction.from_string_matching(machine_translated, final_translation),
         }
 
+    def complete_post_edit(self, messages):
+        if settings.TULUN_MODE != 'development':
+            raise RuntimeError('Legacy providers require development mode.')
+        response = litellm.completion(
+            model=self.config.post_editing_model, messages=messages,
+            temperature=0.5, timeout=settings.AI_GATEWAY_TIMEOUT_SECONDS, num_retries=0,
+        )
+        return response.choices[0].message.content.strip()
+
+
+class TranslatorGateway(TranslatorMixin):
+    def __init__(self, configuration, deadline, request_id):
+        validate_configuration(configuration)
+        super().__init__(configuration)
+        self.deadline = deadline
+        self.request_id = request_id
+        self._translation_memory = {}
+
+    def translate(self, text):
+        if text not in self._translation_memory:
+            self._translation_memory[text] = complete(
+                self.config.translation_model,
+                [
+                    {'role': 'system', 'content': f'Translate English to {self.config.target_language_name}. Return only the translation.'},
+                    {'role': 'user', 'content': text},
+                ],
+                self.deadline, self.request_id,
+            )
+        return self._translation_memory[text]
+
+    def complete_post_edit(self, messages):
+        return complete(self.config.post_editing_model, messages, self.deadline, self.request_id)
+
 
 class TranslatorGoogle(TranslatorMixin):
     def __init__(self) -> None:
+        if settings.TULUN_MODE != 'development':
+            raise RuntimeError('Legacy providers require development mode.')
+        from google.cloud import translate_v2 as translate
         self.memory_filename = 'datafiles/google_translations.json'
         self.gclient = translate.Client()
         self.load_translation_memory()
@@ -145,7 +172,7 @@ class TranslatorGoogle(TranslatorMixin):
     def translate(self, text: str) -> str:
         if text in self._translation_memory:
             return self._translation_memory[text]
-        translation = self.gclient.translate(text, source_language='en', target_language=config.target_language_code)
+        translation = self.gclient.translate(text, source_language='en', target_language=self.config.target_language_code)
         translation = translation['translatedText']
         self._translation_memory[text] = translation
         self.save_translation_memory()
@@ -154,6 +181,9 @@ class TranslatorGoogle(TranslatorMixin):
 
 class TranslatorHuggingFace(TranslatorMixin):
     def __init__(self, model_name: str = "Helsinki-NLP/opus-mt-en-tdt"):
+        if settings.TULUN_MODE != 'development':
+            raise RuntimeError('Legacy providers require development mode.')
+        import transformers
         self.translator = transformers.pipeline("translation", model=model_name)
         model_name_for_filename = model_name.replace("/", "_")
         self.memory_filename = f'datafiles/huggingface_{model_name_for_filename}.json'

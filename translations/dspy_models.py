@@ -1,4 +1,8 @@
 import os
+from django.conf import settings
+
+if settings.TULUN_MODE != 'development':
+    raise RuntimeError('Legacy DSPy integration requires development mode.')
 import json
 from typing import List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field

@@ -1,13 +1,27 @@
-version: '3.8'
-
 services:
-  web:
-    build: .
+  db:
+    image: postgres:16.14-bookworm
+    environment:
+      POSTGRES_DB: tulun
+      POSTGRES_USER: tulun
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:?Set a local-only database password}
     volumes:
-      - ./db.sqlite3:/app/db.sqlite3
-      - ./staticfiles:/app/staticfiles
-    env_file:
-      - prod.env
+      - tulun-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tulun -d tulun"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://tulun:${LOCAL_POSTGRES_PASSWORD}@db:5432/tulun
     ports:
-      - "8008:8008"
-    restart: unless-stopped
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  tulun-postgres:

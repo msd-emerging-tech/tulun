@@ -95,7 +95,7 @@ class CorpusEntry(models.Model):
         for i, line in enumerate(lines):
             writer.add_document(tantivy.Document(
                 text=line.english_text,
-                tgt_text=line.translated_text,
+                translated_text=line.translated_text,
                 id=i  # Store the index
             ))
         writer.commit()
@@ -105,11 +105,18 @@ class CorpusEntry(models.Model):
     
     @classmethod
     def get_top_similar_bm25(cls, sent: str, top_n: int = 10) -> List['CorpusEntry']:
-        lines = cls.objects.all()
+        lines = list(cls.objects.all())
+        if not lines or top_n <= 0:
+            return []
+
+        query_tokens = cls(english_text=sent, translated_text=None).tokens
+        if not query_tokens:
+            return []
 
         index = cls.init_tantivy_index(lines)
+        index.reload()
         searcher = index.searcher()
-        query_tokens = cls(english_text=sent, translated_text=None).tokens
+
         query = index.parse_query(' '.join(query_tokens), ["text"])
         search_results = searcher.search(query, top_n).hits
         if not search_results:

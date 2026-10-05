@@ -1,36 +1,26 @@
-"""
-URL configuration for tulun project.
+from django.conf import settings
+from django.urls import path
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-from django.contrib import admin
-from django.urls import path, reverse_lazy
-from django.contrib.auth import views as auth_views
-from django.shortcuts import redirect
-from django.http import HttpResponse
-from translations.views import translate_view, create_corpus_entry
+from translations import api
 
-def healthcheck(request):
-    return HttpResponse("OK")
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('accounts/login/', auth_views.LoginView.as_view(template_name='translations/login.html'), name='login'),
-    path('accounts/logout/', auth_views.LogoutView.as_view(template_name='translations/logout.html'), name='logout'),
-    path('translate/', translate_view, name='translate'),
-    # redirect to translate view
-    path('', lambda request: redirect(reverse_lazy('translate')), name='home'),
-    path('api/corpus-entry/', create_corpus_entry, name='create_corpus_entry'),
-    path('healthcheck/', healthcheck, name='healthcheck'),
+    path('api/v1/health', api.health, name='api-health'),
+    path('api/v1/ready', api.ready, name='api-ready'),
+    path('api/v1/translate', api.translate, name='api-translate'),
 ]
+
+if settings.TULUN_ENABLE_LEGACY_UI:
+    from django.contrib import admin
+    from django.contrib.auth import views as auth_views
+    from django.shortcuts import redirect
+    from translations.views import create_corpus_entry, translate_view
+
+    urlpatterns += [
+        path('admin/', admin.site.urls),
+        path('accounts/login/', auth_views.LoginView.as_view(template_name='translations/login.html'), name='login'),
+        path('accounts/logout/', auth_views.LogoutView.as_view(template_name='translations/logout.html'), name='logout'),
+        path('translate/', translate_view, name='translate'),
+        path('', lambda request: redirect('translate'), name='home'),
+        path('api/corpus-entry/', create_corpus_entry, name='create_corpus_entry'),
+    ]

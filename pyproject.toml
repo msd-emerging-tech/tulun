@@ -9,18 +9,14 @@ license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "django (>=5.1.7,<6.0.0)",
-    "daphne (>=4.1.2,<5.0.0)",
-    "transformers (>=4.50.1,<5.0.0)",
-    "google-cloud-translate (>=3.20.2,<4.0.0)",
+    "django (>=5.2,<5.3)",
+    "gunicorn (>=23,<24)",
+    "dj-database-url (>=3,<4)",
+    "psycopg[binary] (>=3.2,<4)",
     "spacy (>=3.8.4,<4.0.0)",
-    "tqdm (>=4.67.1,<5.0.0)",
     "python-dotenv (>=1.1.0,<2.0.0)",
-    "dspy (>=2.6.15,<3.0.0)",
     "tantivy (>=0.22.2,<0.23.0)",
-    "sentencepiece (>=0.2.0,<0.3.0)",
-    "litellm (>=1.62.0,<2.0.0)",
-    "torch (>=2.6.0,<3.0.0) ; sys_platform == \"linux\"",
+    "litellm (>=1.96.2,<2.0.0)",
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"
 ]
 
@@ -36,5 +32,15 @@ priority = "explicit"
 
 
 [tool.poetry.dependencies]
-torch = {source = "pytorch_cpu", platform = "linux"}
 en_core_web_sm = {url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz"}
+
+[tool.poetry.group.legacy]
+optional = true
+
+[tool.poetry.group.legacy.dependencies]
+daphne = ">=4.1.2,<5"
+transformers = ">=4.50.1,<5"
+google-cloud-translate = ">=3.20.2,<4"
+dspy = ">=2.6.15,<3"
+sentencepiece = ">=0.2,<0.3"
+torch = {version = ">=2.6,<3", source = "pytorch_cpu", platform = "linux"}

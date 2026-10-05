@@ -129,6 +129,9 @@ celerybeat.pid
 
 # Environments
 .env
+*.env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -176,3 +179,4 @@ cython_debug/
 datafiles/*
 staticfiles/*
 gen-lang-client-*.json
+artifacts/
