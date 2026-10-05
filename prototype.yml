@@ -1,0 +1,38 @@
+version: 2
+deployment:
+  type: custom-docker
+routing:
+  stripPrefix: true
+services:
+  - name: tulun-api
+    source:
+      type: build
+      context: ./
+      dockerfile: ./Dockerfile
+    internalPort: 8000
+    public: true
+    health:
+      path: /api/v1/health
+      timeoutSeconds: 5
+      intervalSeconds: 5
+      retries: 12
+    readiness:
+      path: /api/v1/ready
+    migration:
+      command: [python, manage.py, migrate, --noinput]
+      timeoutSeconds: 300
+    resources:
+      cpuMillicores: 500
+      memoryMiB: 512
+    environment:
+      - { key: DJANGO_SECRET_KEY, source: secret }
+      - { key: DATABASE_URL, source: database_url }
+      - { key: TULUN_API_KEY, source: secret }
+      - { key: AI_GATEWAY_API_KEY, source: secret }
+      - { key: AI_GATEWAY_BASE_URL, source: config }
+      - { key: AI_GATEWAY_MODELS, source: config }
+      - { key: DJANGO_ALLOWED_HOSTS, source: config }
+resources:
+  database:
+    required: true
+  storage: []

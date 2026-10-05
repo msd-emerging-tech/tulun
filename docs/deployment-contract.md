@@ -64,6 +64,24 @@ SQLite and direct providers; returning to it is not a safe operational rollback
 without restoring its database/configuration/runtime contract. PostgreSQL data
 transfer is a separate controlled task; do not silently replace existing SQLite data.
 
-Outstanding platform contract: custom Docker manifest schema, egress allowlisting,
-resource admission, secret delivery, and deployment orchestration. No Main-Website
-files or production resources are changed by this repository work.
+## Registration manifest
+
+The repository-root `prototype.yml` uses Main-Website's version-2 Custom Docker
+contract. Commit and push this file to the deployment branch before registering
+the existing repository in Prototype Admin; a local file alone is not visible to
+the control plane. The manifest declares port, health/readiness, argv migrations,
+resource limits and runtime reference requirements, never secret values.
+
+Configure `DJANGO_ALLOWED_HOSTS` to include the public platform hostname and
+`tulun-api` for private health/readiness probes. Bind the three application secret
+references (`DJANGO_SECRET_KEY`, `TULUN_API_KEY`, `AI_GATEWAY_API_KEY`), plus the
+platform-managed dedicated `DATABASE_URL`. Gateway URL and model aliases remain
+operator-approved configuration, not baked-in deployment values.
+
+The platform generates the route from the registered slug. A registration using
+`translation-backend` is reached at `/translation-backend/api/v1/translate`, not
+`/tulun/api/v1/translate`. The manifest strips either platform-owned prefix.
+
+Gateway reachability/egress, least-privilege secret delivery, dedicated database
+provisioning and production orchestration remain operational release checks. No
+production resources are changed by adding the manifest.
