@@ -1,5 +1,42 @@
 # Verification evidence and remaining gates
 
+## Container base remediation: 2026-10-14
+
+The deployed image from Tulun commit `40a8316` was rejected before runtime
+provisioning because the scanner reported these Bookworm operating-system packages:
+
+| Finding | Package in rejected image |
+| --- | --- |
+| `CVE-2025-7458` | `libsqlite3-0` `3.40.1-2+deb12u2` |
+| `CVE-2023-45853` | `zlib1g` `1:1.2.13.dfsg-1` |
+
+Both Docker stages now use the same digest-pinned official Python
+`3.12.15-slim-trixie` base instead of Bookworm. Python version, locked application
+dependencies, non-root runtime identity and platform vulnerability policy are unchanged.
+No scanner ignore rule or increased vulnerability allowance has been added.
+
+The official Docker registry manifest and its Linux/amd64 layer package metadata
+were inspected without building or running a container. The selected base contains
+`libsqlite3-0` `3.46.1-7+deb13u2` and `zlib1g`
+`1:1.3.dfsg+really1.3.1-1+b1`; Debian's security tracker lists the Trixie source
+versions as fixed for the respective findings. For the Bookworm zlib report,
+Debian notes that the vulnerable MiniZip component is not built into its binary
+packages; the remediation still replaces the base rather than disabling scanning.
+
+All 57 local tests pass, including a regression check that both stages share a
+digest-pinned Python 3.12 Trixie base. `git diff --check` also passes. A complete
+rebuilt Tulun image scan, container compatibility
+and live deployment still require Docker-capable CI/the trusted runner. The registry
+metadata check is not a full-image vulnerability scan or proof that no other CVEs exist.
+
+Publish the Dockerfile change, create a new prototype deployment at the new Tulun
+commit and inspect its vulnerability evidence before runtime admission. Do not rerun
+the failed snapshot at `40a8316`; that revision still contains the Bookworm Dockerfile.
+
+References:
+- `https://security-tracker.debian.org/tracker/CVE-2025-7458`
+- `https://security-tracker.debian.org/tracker/CVE-2023-45853`
+
 ## Direct Foundry support: 2026-10-13
 
 - All 56 automated API, settings and transport tests pass locally on SQLite,

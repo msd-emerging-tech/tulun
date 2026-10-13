@@ -1,4 +1,4 @@
-FROM python:3.12.15-slim-bookworm AS dependencies
+FROM python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS dependencies
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     POETRY_VIRTUALENVS_CREATE=false POETRY_NO_INTERACTION=1
@@ -8,7 +8,7 @@ ENV VIRTUAL_ENV=/opt/venv PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root --no-ansi && rm -rf /root/.cache
 
-FROM python:3.12.15-slim-bookworm AS runtime
+FROM python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" TULUN_MODE=msd \
