@@ -1,5 +1,33 @@
 # Verification evidence and remaining gates
 
+## Direct Foundry support: 2026-10-13
+
+- All 56 automated API, settings and transport tests pass locally on SQLite,
+  including both model stages in Foundry mode without Gateway credentials,
+  readiness, independent caller auth and explicit configuration provisioning.
+- Real LiteLLM-to-local-HTTP tests verify `/openai/v1/chat/completions` and
+  `/openai/v1/responses`, selected
+  key and model, request ID, bounded output, sanitized failures and no retries.
+  Missing Foundry settings, unknown providers and unapproved deployments never
+  fall back to the Gateway or make a model request.
+- Responses tests preserve the supplied `gpt-6-luna` deployment name, require
+  completed text output, allow reasoning before text and reject refusals,
+  incomplete/failed responses and unexpected tool output. Requests explicitly
+  disable response storage and background execution.
+- `.env.example` uses the supplied `claude-sonnet-resource` Responses endpoint
+  and `gpt-6-luna`; configuration tests verify endpoint normalization and API style.
+- The updated root manifest passes Main-Website's actual Custom Docker parser.
+  `AI_PROVIDER` is required; both provider-specific groups are optional at platform
+  admission and selected-provider completeness is enforced by application readiness.
+- Django checks, migration-drift check and `git diff --check` pass. No database
+  schema or dependency changes are required.
+- No actual Foundry key was supplied. The operator-supplied endpoint and deployment
+  were configured but not contacted or verified live. VM
+  secret installation, publication, image build, Main-Website deployment,
+  production network access and live translation remain unverified.
+
+## Original Gateway verification
+
 Executed locally on 2026-10-05 UTC with isolated Python 3.12.15:
 
 - 29 automated tests pass with SQLite, exercising actual spaCy glossary matching,

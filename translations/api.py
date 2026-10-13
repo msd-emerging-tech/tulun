@@ -8,7 +8,7 @@ from django.db import DatabaseError, connection, transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from .gateway import GatewayError, validate_configuration
+from .gateway import GatewayError, client_authentication_configured, validate_configuration
 from .models import CorpusEntry, GlossaryEntry, SystemConfiguration, Translation
 
 
@@ -19,7 +19,7 @@ def error_response(request, code, message, status):
     }}, status=status)
     if status == 401:
         response['WWW-Authenticate'] = 'Bearer'
-    if code == 'GATEWAY_RATE_LIMITED':
+    if code in ('GATEWAY_RATE_LIMITED', 'FOUNDRY_RATE_LIMITED'):
         response['Retry-After'] = '60'
     return response
 
@@ -41,9 +41,7 @@ def ready(request):
     method_error = check_method(request, 'GET')
     if method_error:
         return method_error
-    if (not settings.TULUN_API_KEY or not settings.AI_GATEWAY_BASE_URL
-            or not settings.AI_GATEWAY_API_KEY or not settings.AI_GATEWAY_MODELS
-            or settings.TULUN_API_KEY == settings.AI_GATEWAY_API_KEY):
+    if not client_authentication_configured():
         return error_response(request, 'NOT_READY', 'Service is not ready.', 503)
     try:
         with connection.cursor() as cursor:
@@ -71,7 +69,7 @@ def translate(request):
     method_error = check_method(request, 'POST')
     if method_error:
         return method_error
-    if not settings.TULUN_API_KEY or settings.TULUN_API_KEY == settings.AI_GATEWAY_API_KEY:
+    if not client_authentication_configured():
         return error_response(request, 'SERVICE_NOT_CONFIGURED', 'Service is not configured.', 503)
     authorization = request.headers.get('Authorization', '')
     expected = f'Bearer {settings.TULUN_API_KEY}'

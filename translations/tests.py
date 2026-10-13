@@ -77,6 +77,107 @@ class ApiTests(TestCase):
                 response = self.client.post('/api/v1/translate', HTTP_AUTHORIZATION=key)
                 self.assertEqual(response.status_code, 401)
 
+    @override_settings(
+        AI_PROVIDER='foundry',
+        AZURE_FOUNDRY_BASE_URL='https://resource.services.ai.azure.com/openai/v1',
+        AZURE_FOUNDRY_API_KEY='foundry-test-secret',
+        AZURE_FOUNDRY_MODELS=('translation-test',),
+        AI_GATEWAY_BASE_URL='', AI_GATEWAY_API_KEY='', AI_GATEWAY_MODELS=(),
+    )
+    def test_foundry_readiness_and_both_translation_stages_without_gateway(self):
+        self.assertEqual(self.client.get('/api/v1/ready').status_code, 200)
+        with patch('litellm.completion', return_value=self.completion()) as completion:
+            response = self.post()
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Translation.objects.count(), 1)
+        self.assertGreaterEqual(completion.call_count, 2)
+        for call in completion.call_args_list:
+            self.assertEqual(call.kwargs['api_base'], 'https://resource.services.ai.azure.com/openai/v1')
+            self.assertEqual(call.kwargs['api_key'], 'foundry-test-secret')
+            self.assertEqual(call.kwargs['model'], 'openai/translation-test')
+            self.assertEqual(call.kwargs['num_retries'], 0)
+        response = self.client.post('/api/v1/translate', HTTP_AUTHORIZATION='Bearer foundry-test-secret')
+        self.assertEqual(response.status_code, 401)
+
+    @override_settings(
+        AI_PROVIDER='foundry', AZURE_FOUNDRY_API_STYLE='responses',
+        AZURE_FOUNDRY_BASE_URL='https://claude-sonnet-resource.services.ai.azure.com/openai/v1',
+        AZURE_FOUNDRY_API_KEY='foundry-test-secret', AZURE_FOUNDRY_MODELS=('gpt-6-luna',),
+        AI_GATEWAY_BASE_URL='', AI_GATEWAY_API_KEY='', AI_GATEWAY_MODELS=(),
+    )
+    def test_responses_api_runs_both_stages_with_exact_deployment_and_no_storage(self):
+        from litellm.types.llms.openai import ResponsesAPIResponse
+        self.config.translation_model = self.config.post_editing_model = 'gpt-6-luna'
+        self.config.save()
+        provider_response = ResponsesAPIResponse.model_validate({
+            'id': 'resp_test', 'object': 'response', 'created_at': 1,
+            'model': 'gpt-6-luna', 'status': 'completed',
+            'output': [{
+                'id': 'msg_test', 'type': 'message', 'role': 'assistant', 'status': 'completed',
+                'content': [{'type': 'output_text', 'text': 'Whakaora te patunga.', 'annotations': []}],
+            }],
+        })
+        with patch('litellm.responses', return_value=provider_response) as responses, \
+                patch('litellm.completion') as chat:
+            response = self.post()
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['translation'], 'Whakaora te patunga.')
+        self.assertEqual(Translation.objects.count(), 1)
+        self.assertGreaterEqual(responses.call_count, 2)
+        chat.assert_not_called()
+        for call in responses.call_args_list:
+            self.assertEqual(call.kwargs['api_base'], 'https://claude-sonnet-resource.services.ai.azure.com/openai/v1')
+            self.assertEqual(call.kwargs['model'], 'openai/gpt-6-luna')
+            self.assertEqual(call.kwargs['api_key'], 'foundry-test-secret')
+            self.assertFalse(call.kwargs['store'])
+            self.assertFalse(call.kwargs['background'])
+            self.assertEqual(call.kwargs['max_output_tokens'], 2048)
+            self.assertEqual(call.kwargs['num_retries'], 0)
+
+    @override_settings(AI_PROVIDER='foundry', AZURE_FOUNDRY_API_KEY='')
+    def test_missing_foundry_settings_fail_closed_despite_gateway_settings(self):
+        self.assertEqual(self.client.get('/api/v1/ready').status_code, 503)
+        with patch('litellm.completion') as completion:
+            response = self.post()
+        self.assertEqual(response.status_code, 503)
+        completion.assert_not_called()
+        self.assertEqual(Translation.objects.count(), 0)
+
+    @override_settings(AI_PROVIDER='foundry', AZURE_FOUNDRY_API_KEY='client-test-secret')
+    def test_foundry_key_cannot_be_reused_for_caller_authentication(self):
+        self.assertEqual(self.client.get('/api/v1/ready').status_code, 503)
+        self.assertEqual(self.post().status_code, 503)
+
+    def test_foundry_rate_limit_has_safe_retry_header(self):
+        from translations.gateway import GatewayError
+        with patch('litellm.completion', side_effect=GatewayError('FOUNDRY_RATE_LIMITED', 429)):
+            response = self.post()
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response['Retry-After'], '60')
+        self.assertEqual(response.json()['error']['code'], 'FOUNDRY_RATE_LIMITED')
+
+    @override_settings(
+        AI_PROVIDER='foundry',
+        AZURE_FOUNDRY_BASE_URL='https://resource.services.ai.azure.com/openai/v1',
+        AZURE_FOUNDRY_API_KEY='foundry-test-secret',
+        AZURE_FOUNDRY_MODELS=('foundry-deployment',),
+        AI_GATEWAY_BASE_URL='', AI_GATEWAY_API_KEY='', AI_GATEWAY_MODELS=(),
+    )
+    def test_configuration_command_uses_foundry_deployments_without_model_calls(self):
+        from io import StringIO
+        from django.core.management import call_command
+        with patch('litellm.completion') as completion:
+            call_command(
+                'configure_translation', target_language_code='mi', target_language_name='Māori',
+                translation_model='foundry-deployment', post_editing_model='foundry-deployment',
+                retrieved_sentences=5, stdout=StringIO(),
+            )
+        completion.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.translation_model, 'foundry-deployment')
+        self.assertEqual(self.config.post_editing_model, 'foundry-deployment')
+        self.assertEqual(self.client.get('/api/v1/ready').status_code, 200)
+
     @override_settings(TULUN_API_KEY='')
     def test_unconfigured_authentication_fails_closed(self):
         self.assertEqual(self.post().status_code, 503)

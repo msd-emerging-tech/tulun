@@ -69,6 +69,7 @@ def environment(database_url, gateway_url):
         'TULUN_MODE': 'msd', 'DJANGO_SECRET_KEY': secrets.token_urlsafe(64),
         'DJANGO_ALLOWED_HOSTS': '127.0.0.1 localhost', 'DATABASE_URL': database_url,
         'TULUN_API_KEY': secrets.token_urlsafe(32),
+        'AI_PROVIDER': 'gateway',
         'AI_GATEWAY_BASE_URL': gateway_url, 'AI_GATEWAY_API_KEY': secrets.token_urlsafe(32),
         'AI_GATEWAY_MODELS': 'translation-test', 'AI_GATEWAY_ALLOW_INSECURE_HTTP': 'true',
         'LITELLM_LOCAL_MODEL_COST_MAP': 'True',

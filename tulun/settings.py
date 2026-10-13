@@ -37,6 +37,9 @@ if TULUN_MODE == 'msd' and (not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS):
     raise ImproperlyConfigured('DJANGO_ALLOWED_HOSTS must contain explicit hosts.')
 
 TULUN_API_KEY = os.environ.get('TULUN_API_KEY', '')
+AI_PROVIDER = os.environ.get('AI_PROVIDER', 'gateway')
+if AI_PROVIDER not in ('gateway', 'foundry'):
+    raise ImproperlyConfigured('AI_PROVIDER must be gateway or foundry.')
 AI_GATEWAY_BASE_URL = os.environ.get('AI_GATEWAY_BASE_URL', '').rstrip('/')
 AI_GATEWAY_API_KEY = os.environ.get('AI_GATEWAY_API_KEY', '')
 AI_GATEWAY_MODELS = tuple(os.environ.get('AI_GATEWAY_MODELS', '').replace(',', ' ').split())
@@ -47,8 +50,29 @@ if AI_GATEWAY_BASE_URL:
             or not gateway_url.hostname or gateway_url.username or gateway_url.password
             or gateway_url.query or gateway_url.fragment or not gateway_url.path.endswith('/v1')):
         raise ImproperlyConfigured('AI_GATEWAY_BASE_URL must be an approved URL ending in /v1.')
-if TULUN_API_KEY and TULUN_API_KEY == AI_GATEWAY_API_KEY:
-    raise ImproperlyConfigured('Client and Gateway credentials must be different.')
+AZURE_FOUNDRY_BASE_URL = os.environ.get('AZURE_FOUNDRY_BASE_URL', '').rstrip('/')
+AZURE_FOUNDRY_API_KEY = os.environ.get('AZURE_FOUNDRY_API_KEY', '')
+AZURE_FOUNDRY_MODELS = tuple(os.environ.get('AZURE_FOUNDRY_MODELS', '').replace(',', ' ').split())
+AZURE_FOUNDRY_API_STYLE = os.environ.get('AZURE_FOUNDRY_API_STYLE', '')
+if AZURE_FOUNDRY_BASE_URL:
+    foundry_url = urlsplit(AZURE_FOUNDRY_BASE_URL)
+    if (foundry_url.scheme != 'https' or not foundry_url.hostname
+            or foundry_url.username or foundry_url.password
+            or foundry_url.query or foundry_url.fragment
+            or foundry_url.path not in ('', '/openai/v1', '/openai/v1/responses')):
+        raise ImproperlyConfigured('AZURE_FOUNDRY_BASE_URL must be an HTTPS resource URL, /openai/v1 base or /openai/v1/responses endpoint.')
+    if not foundry_url.path:
+        AZURE_FOUNDRY_BASE_URL += '/openai/v1'
+    elif foundry_url.path == '/openai/v1/responses':
+        if AZURE_FOUNDRY_API_STYLE and AZURE_FOUNDRY_API_STYLE != 'responses':
+            raise ImproperlyConfigured('A Responses endpoint requires AZURE_FOUNDRY_API_STYLE=responses.')
+        AZURE_FOUNDRY_BASE_URL = AZURE_FOUNDRY_BASE_URL.removesuffix('/responses')
+        AZURE_FOUNDRY_API_STYLE = 'responses'
+AZURE_FOUNDRY_API_STYLE = AZURE_FOUNDRY_API_STYLE or 'chat_completions'
+if AZURE_FOUNDRY_API_STYLE not in ('chat_completions', 'responses'):
+    raise ImproperlyConfigured('AZURE_FOUNDRY_API_STYLE must be chat_completions or responses.')
+if TULUN_API_KEY and TULUN_API_KEY in (AI_GATEWAY_API_KEY, AZURE_FOUNDRY_API_KEY):
+    raise ImproperlyConfigured('Client and model provider credentials must be different.')
 
 TULUN_MAX_TEXT_LENGTH = bounded_integer('TULUN_MAX_TEXT_LENGTH', 4000, 1, 16000)
 TULUN_MAX_BODY_BYTES = bounded_integer('TULUN_MAX_BODY_BYTES', 32768, 1024, 131072)

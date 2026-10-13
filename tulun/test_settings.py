@@ -13,3 +13,5 @@ if not os.environ.get('TULUN_TEST_DATABASE_URL'):
 else:
     DATABASES = {'default': dj_database_url.parse(os.environ['TULUN_TEST_DATABASE_URL'])}
 TULUN_ENABLE_LEGACY_UI = False
+AI_PROVIDER = 'gateway'
+AZURE_FOUNDRY_API_STYLE = 'chat_completions'

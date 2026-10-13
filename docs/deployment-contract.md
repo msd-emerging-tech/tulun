@@ -11,8 +11,10 @@ Migration command: ["python", "manage.py", "migrate", "--noinput"]
 Production startup command: ["gunicorn", "--config", "gunicorn.conf.py", "tulun.wsgi:application"]
 Expected API path: POST /api/v1/translate (no trailing slash)
 Suggested external path: POST /tulun/api/v1/translate
-Required secret names: DJANGO_SECRET_KEY, DATABASE_URL, TULUN_API_KEY, AI_GATEWAY_API_KEY
-Required non-secret names: AI_GATEWAY_BASE_URL, AI_GATEWAY_MODELS
+Required common secrets: DJANGO_SECRET_KEY, TULUN_API_KEY (DATABASE_URL platform-managed)
+Required common configuration: AI_PROVIDER
+Foundry mode: AZURE_FOUNDRY_API_KEY secret; AZURE_FOUNDRY_BASE_URL, AZURE_FOUNDRY_API_STYLE and AZURE_FOUNDRY_MODELS configuration
+Gateway mode: AI_GATEWAY_API_KEY secret; AI_GATEWAY_BASE_URL and AI_GATEWAY_MODELS configuration
 Routing configuration: DJANGO_ALLOWED_HOSTS (platform hostname, localhost, 127.0.0.1)
 Deployment mode: TULUN_MODE=msd (image default)
 Persistence: dedicated externally persisted PostgreSQL database and application user
@@ -51,12 +53,15 @@ python manage.py configure_translation \
   --post-editing-model APPROVED_GATEWAY_ALIAS
 ```
 
-Choose a language and model aliases approved by the owning team/Gateway. The command
+Choose a language and model aliases/deployments approved by the owning team. The command
 returns the actual `configuration_id` needed by clients and validates the allowlist.
 It never invokes an LLM. It resets the post-edit prompt and clears legacy DSPy state;
 review before running it against existing data. Gateway base URL ends in `/v1`, for
-example the privately configured address or platform-prefixed Gateway route. Never
-point it to Foundry or supply a raw provider credential.
+example the privately configured address or platform-prefixed Gateway route. For
+direct Foundry, explicitly set `AI_PROVIDER=foundry` and use the separate
+`AZURE_FOUNDRY_*` settings; never place a Foundry key in `AI_GATEWAY_API_KEY`.
+See [Foundry deployment](foundry-deployment.md) for the temporary setup and its
+governance implications.
 
 No schema migrations are added: the 19 upstream migrations remain unchanged. Rolling
 back this application change does not remove columns. The old image still uses
@@ -73,9 +78,12 @@ the control plane. The manifest declares port, health/readiness, argv migrations
 resource limits and runtime reference requirements, never secret values.
 
 Configure `DJANGO_ALLOWED_HOSTS` to include the public platform hostname and
-`tulun-api` for private health/readiness probes. Bind the three application secret
-references (`DJANGO_SECRET_KEY`, `TULUN_API_KEY`, `AI_GATEWAY_API_KEY`), plus the
-platform-managed dedicated `DATABASE_URL`. Gateway URL and model aliases remain
+`tulun-api` for private health/readiness probes. Bind the common application secret
+references (`DJANGO_SECRET_KEY`, `TULUN_API_KEY`) and the selected provider key
+(`AZURE_FOUNDRY_API_KEY` or `AI_GATEWAY_API_KEY`), plus the platform-managed dedicated
+`DATABASE_URL`. Set `AI_PROVIDER` explicitly. The unused provider's bindings can
+remain empty: the manifest marks both provider groups optional, while application
+readiness requires all settings for the selected group. URLs and model names remain
 operator-approved configuration, not baked-in deployment values.
 
 The platform generates the route from the registered slug. A registration using

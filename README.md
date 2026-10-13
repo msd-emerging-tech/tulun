@@ -2,8 +2,15 @@
 
 This MSD-controlled fork adapts Tulun's existing English-to-configured-language
 translation and post-editing pipeline into a bounded, authenticated Django API.
-Both model stages use the Governed AI Gateway; no Foundry/Google/Gemini key is
-required. There is no direct-provider fallback in MSD mode.
+Both model stages use the explicitly selected provider: the Governed AI Gateway
+by default, or direct Azure AI Foundry when `AI_PROVIDER=foundry`. Foundry support
+uses its OpenAI-compatible `/openai/v1` Chat Completions or Responses endpoint.
+The example configuration selects your supplied Responses endpoint and `gpt-6-luna`.
+There is no automatic
+provider fallback, and Google/Gemini/legacy providers remain disabled in MSD mode.
+
+For the temporary Foundry setup, see [Foundry deployment](docs/foundry-deployment.md).
+The actual Foundry key remains a protected runtime secret, never a manifest value.
 
 Public upstream: `https://github.com/raphaelmerx/tulun` (MIT).
 Fork base: `e81f7a7291b3d7636818be7c7c35f50811dd0747` (`Update README.md`).

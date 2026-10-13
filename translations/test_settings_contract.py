@@ -10,7 +10,8 @@ class SettingsContractTests(SimpleTestCase):
     def inspect_settings(self, changes, query='import tulun.settings'):
         environment = {
             key: value for key, value in os.environ.items()
-            if not key.startswith(('DJANGO_', 'TULUN_', 'AI_GATEWAY_', 'DATABASE_'))
+            if not key.startswith(('DJANGO_', 'TULUN_', 'AI_GATEWAY_', 'AZURE_FOUNDRY_', 'DATABASE_'))
+            and key != 'AI_PROVIDER'
         }
         environment.update({
             'TULUN_MODE': 'msd',
@@ -42,6 +43,16 @@ class SettingsContractTests(SimpleTestCase):
             {'TULUN_API_KEY': 'identical-secret', 'AI_GATEWAY_API_KEY': 'identical-secret'},
             {'AI_GATEWAY_BASE_URL': 'http://gateway.example/v1'},
             {'AI_GATEWAY_BASE_URL': 'https://user:identical-secret@gateway.example/v1'},
+            {'AI_PROVIDER': 'provider-typo'},
+            {'AZURE_FOUNDRY_BASE_URL': 'http://resource.services.ai.azure.com/openai/v1'},
+            {'AZURE_FOUNDRY_BASE_URL': 'https://user:identical-secret@resource.services.ai.azure.com'},
+            {'AZURE_FOUNDRY_BASE_URL': 'https://resource.services.ai.azure.com/models'},
+            {'AZURE_FOUNDRY_BASE_URL': 'https://resource.services.ai.azure.com/openai/v1?api-version=preview'},
+            {'AZURE_FOUNDRY_BASE_URL': 'https://resource.services.ai.azure.com/openai/v1#fragment'},
+            {'AZURE_FOUNDRY_API_STYLE': 'unsupported'},
+            {'AZURE_FOUNDRY_BASE_URL': 'https://resource.services.ai.azure.com/openai/v1/responses',
+             'AZURE_FOUNDRY_API_STYLE': 'chat_completions'},
+            {'TULUN_API_KEY': 'identical-secret', 'AZURE_FOUNDRY_API_KEY': 'identical-secret'},
         ):
             with self.subTest(changes=changes):
                 result = self.inspect_settings(changes)
@@ -61,4 +72,46 @@ class SettingsContractTests(SimpleTestCase):
         result = self.inspect_settings({},
             'from tulun.settings import AI_GATEWAY_BASE_URL, AI_GATEWAY_API_KEY; '
             'assert not AI_GATEWAY_BASE_URL and not AI_GATEWAY_API_KEY')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_foundry_resource_url_is_normalized_to_v1(self):
+        for endpoint in (
+            'https://resource.services.ai.azure.com',
+            'https://resource.services.ai.azure.com/',
+            'https://resource.services.ai.azure.com/openai/v1/',
+        ):
+            with self.subTest(endpoint=endpoint):
+                result = self.inspect_settings(
+                    {'AI_PROVIDER': 'foundry', 'AZURE_FOUNDRY_BASE_URL': endpoint},
+                    'from tulun.settings import AI_PROVIDER, AZURE_FOUNDRY_BASE_URL; '
+                    'assert AI_PROVIDER == "foundry"; '
+                    'assert AZURE_FOUNDRY_BASE_URL == "https://resource.services.ai.azure.com/openai/v1"',
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_full_responses_endpoint_selects_responses_and_normalizes_base(self):
+        for suffix in ('/responses', '/responses/'):
+            with self.subTest(suffix=suffix):
+                result = self.inspect_settings(
+                    {'AI_PROVIDER': 'foundry', 'AZURE_FOUNDRY_BASE_URL':
+                     f'https://claude-sonnet-resource.services.ai.azure.com/openai/v1{suffix}'},
+                    'from tulun.settings import AZURE_FOUNDRY_BASE_URL, AZURE_FOUNDRY_API_STYLE; '
+                    'assert AZURE_FOUNDRY_BASE_URL == "https://claude-sonnet-resource.services.ai.azure.com/openai/v1"; '
+                    'assert AZURE_FOUNDRY_API_STYLE == "responses"',
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_example_uses_supplied_endpoint_and_exact_deployment(self):
+        from dotenv import dotenv_values
+        example = dotenv_values(Path(__file__).resolve().parent.parent / '.env.example')
+        result = self.inspect_settings(
+            {key: value for key, value in example.items() if key.startswith(('AI_', 'AZURE_FOUNDRY_'))},
+            'from tulun.settings import AI_PROVIDER, AZURE_FOUNDRY_BASE_URL, '
+            'AZURE_FOUNDRY_API_STYLE, AZURE_FOUNDRY_MODELS, AZURE_FOUNDRY_API_KEY; '
+            'assert AI_PROVIDER == "foundry"; '
+            'assert AZURE_FOUNDRY_BASE_URL == "https://claude-sonnet-resource.services.ai.azure.com/openai/v1"; '
+            'assert AZURE_FOUNDRY_API_STYLE == "responses"; '
+            'assert AZURE_FOUNDRY_MODELS == ("gpt-6-luna",); '
+            'assert not AZURE_FOUNDRY_API_KEY',
+        )
         self.assertEqual(result.returncode, 0, result.stderr)

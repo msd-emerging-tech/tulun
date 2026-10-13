@@ -6,7 +6,7 @@ from translations.models import SystemConfiguration
 
 
 class Command(BaseCommand):
-    help = 'Explicitly provision the singleton Gateway translation configuration (no model calls).'
+    help = 'Explicitly provision the singleton translation configuration for the selected provider (no model calls).'
 
     def add_arguments(self, parser):
         parser.add_argument('--target-language-code', required=True)

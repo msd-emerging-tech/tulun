@@ -6,14 +6,15 @@
 database query, external request, or tokens. It exposes no configuration values.
 
 `GET /api/v1/ready` returns `200 {"status":"ready"}` only when database access,
-schema/configuration and Gateway/client settings are ready. Otherwise it returns
-controlled JSON with status 503. It does not validate a live Gateway, key lifecycle,
+schema/configuration and selected provider/client settings are ready. Otherwise it returns
+controlled JSON with status 503. It does not validate a live provider, key lifecycle,
 or model quality by calling an LLM; infrastructure health is independent of AI uptime.
 
 `POST /api/v1/translate` requires `Content-Type: application/json` and
 `Authorization: Bearer <TULUN_API_KEY>` (constant-time exact token comparison).
 Session cookies are not API authentication. This runtime secret is separate from
-Tulun's outgoing `AI_GATEWAY_API_KEY`; they must not be the same.
+Tulun's outgoing `AI_GATEWAY_API_KEY` or `AZURE_FOUNDRY_API_KEY`; caller and provider
+credentials must not be the same.
 
 ```json
 {
@@ -44,7 +45,7 @@ on an API request. There are no configuration/glossary CRUD APIs.
 The API uses TranslatorGateway within the existing TranslatorMixin hierarchy,
 GlossaryEntry matching, CorpusEntry BM25 retrieval, existing prompt builder and
 post-edit/correction logic. The adapter changes only first-pass transport and
-post-edit completion transport. Both stages go through the Gateway. Example first
+post-edit completion transport. Both stages use the selected provider. Example first
 passes are reused in a request-local cache, not a plaintext on-disk JSON cache.
 Translation plus glossary/memory associations persist atomically; `created_by` is
 null because the sandbox shared API secret is not a Django user identity.
@@ -68,12 +69,16 @@ IDs are 1–64 ASCII letters/digits/dot/underscore/hyphen; otherwise UUIDs are g
 | 503 | SERVICE_NOT_CONFIGURED, CONFIGURATION_NOT_SUPPORTED, DATABASE_UNAVAILABLE, NOT_READY. |
 | 504 | GATEWAY_TIMEOUT; call timeout or total translation deadline. |
 
+Direct Foundry mode uses the same safe upstream categories with `FOUNDRY_` in
+place of `GATEWAY_`, including timeout, authentication, policy rejection, rate limit,
+unavailability and invalid response. No provider error body or key is returned.
+
 The compatible SDK sometimes normalizes a malformed HTTP 200 body into an upstream
 exception: either safe 502 category is acceptable; raw details never reach callers.
 Truncated/non-string/empty/refused outputs are not recorded as successful translations.
 No automatic retries, streaming, or provider fallback. Retrying a successful request
 is not idempotent: it can create another Translation and consume model tokens.
-There is no local per-client rate limiter; the platform and Gateway must supply
+There is no local per-client rate limiter; the platform and selected provider must supply
 admission/rate limits. Shared sandbox key is not production multi-tenant identity.
 
 ## Runtime environment
@@ -83,17 +88,22 @@ admission/rate limits. Shared sandbox key is not production multi-tenant identit
 | DJANGO_SECRET_KEY | Required MSD secret; at least 50 characters with sufficient variation. |
 | DATABASE_URL | Required MSD secret; dedicated PostgreSQL URL, never Main-Website's database. |
 | TULUN_API_KEY | Required for translation/readiness; strong application caller secret, not a Gateway key. |
-| AI_GATEWAY_API_KEY | Required for translation/readiness; app-specific Gateway-issued runtime secret. |
-| AI_GATEWAY_BASE_URL | Required for translation/readiness; approved compatible HTTPS base ending in /v1; may include proxy prefix. No credentials/query/fragment. |
-| AI_GATEWAY_MODELS | Required for translation/readiness; comma/space-separated approved Gateway aliases, without `openai/` provider prefix. Both DB model fields must match this allowlist. |
+| AI_PROVIDER | `gateway` by default; set explicitly to `foundry` for direct Foundry. Invalid/empty values fail startup. No automatic fallback. |
+| AZURE_FOUNDRY_API_KEY | Required in Foundry mode; protected Foundry resource key, different from `TULUN_API_KEY`. |
+| AZURE_FOUNDRY_BASE_URL | Required in Foundry mode; HTTPS resource root, `/openai/v1` base or full `/openai/v1/responses` endpoint. A full Responses endpoint selects Responses and is normalized to the base. No credentials/query/fragment or insecure HTTP. |
+| AZURE_FOUNDRY_API_STYLE | `chat_completions` by default; `responses` explicitly or when the endpoint ends in `/responses`. Conflicting endpoint/style values fail startup. Responses requests use `store=false`, `background=false` and bounded `max_output_tokens`. |
+| AZURE_FOUNDRY_MODELS | Required in Foundry mode; comma/space-separated deployment names without provider prefix. Both DB model fields must match this allowlist. |
+| AI_GATEWAY_API_KEY | Required in Gateway mode; app-specific Gateway-issued runtime secret. Unused in Foundry mode. |
+| AI_GATEWAY_BASE_URL | Required in Gateway mode; approved compatible HTTPS base ending in /v1; may include proxy prefix. No credentials/query/fragment. |
+| AI_GATEWAY_MODELS | Required in Gateway mode; comma/space-separated approved Gateway aliases, without `openai/` provider prefix. Both DB model fields must match this allowlist. |
 | DJANGO_ALLOWED_HOSTS | Comma/space-separated explicit hosts; default localhost and 127.0.0.1. Add platform hostname. Wildcard rejected in MSD. |
 | TULUN_MODE | msd by default; development is explicit. Invalid values fail startup. |
 | AI_GATEWAY_ALLOW_INSECURE_HTTP | false; explicit exception for isolated fake Gateway/local or approved private-network HTTP. Never enable for an Internet credential path. |
 | TULUN_MAX_TEXT_LENGTH | 4000 characters; supported range 1–16000. |
 | TULUN_MAX_BODY_BYTES | 32768 bytes; supported range 1024–131072. |
-| AI_GATEWAY_TIMEOUT_SECONDS | 15 seconds per call; range 1–30, additionally capped by remaining total deadline. |
+| AI_GATEWAY_TIMEOUT_SECONDS | 15 seconds per call for either provider; range 1–30, additionally capped by remaining total deadline. |
 | TULUN_TRANSLATION_TIMEOUT_SECONDS | 60 seconds total model work deadline; range 5–90. CPU/DB work is finally bounded by Gunicorn/platform timeout. |
-| AI_GATEWAY_MAX_OUTPUT_TOKENS | 2048 per model call; range 16–4096, must fit the Gateway credential allowance. |
+| AI_GATEWAY_MAX_OUTPUT_TOKENS | 2048 per model call for either provider; range 16–4096, must fit the selected deployment/credential allowance. |
 | TULUN_MAX_PROMPT_CHARS | 24000 combined message characters; range 1000–64000. Includes DB glossary/examples/prompt. |
 | TULUN_MAX_RETRIEVED_SENTENCES | 5; range 0–10. DB config retrieval count must be within this limit. |
 | GUNICORN_WORKERS | 2 synchronous workers, hence at most 2 active translations/container; range 1–4. |

@@ -28,9 +28,14 @@ services:
       - { key: DJANGO_SECRET_KEY, source: secret }
       - { key: DATABASE_URL, source: database_url }
       - { key: TULUN_API_KEY, source: secret }
-      - { key: AI_GATEWAY_API_KEY, source: secret }
-      - { key: AI_GATEWAY_BASE_URL, source: config }
-      - { key: AI_GATEWAY_MODELS, source: config }
+      - { key: AI_PROVIDER, source: config }
+      - { key: AZURE_FOUNDRY_API_KEY, source: secret, required: false }
+      - { key: AZURE_FOUNDRY_BASE_URL, source: config, required: false }
+      - { key: AZURE_FOUNDRY_API_STYLE, source: config, required: false }
+      - { key: AZURE_FOUNDRY_MODELS, source: config, required: false }
+      - { key: AI_GATEWAY_API_KEY, source: secret, required: false }
+      - { key: AI_GATEWAY_BASE_URL, source: config, required: false }
+      - { key: AI_GATEWAY_MODELS, source: config, required: false }
       - { key: DJANGO_ALLOWED_HOSTS, source: config }
 resources:
   database:
