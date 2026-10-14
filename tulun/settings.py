@@ -43,7 +43,7 @@ if AI_PROVIDER not in ('gateway', 'foundry'):
 AI_GATEWAY_BASE_URL = os.environ.get('AI_GATEWAY_BASE_URL', '').rstrip('/')
 AI_GATEWAY_API_KEY = os.environ.get('AI_GATEWAY_API_KEY', '')
 AI_GATEWAY_MODELS = tuple(os.environ.get('AI_GATEWAY_MODELS', '').replace(',', ' ').split())
-if AI_GATEWAY_BASE_URL:
+if AI_PROVIDER == 'gateway' and AI_GATEWAY_BASE_URL:
     gateway_url = urlsplit(AI_GATEWAY_BASE_URL)
     allow_http = os.environ.get('AI_GATEWAY_ALLOW_INSECURE_HTTP', 'false').lower() == 'true'
     if (gateway_url.scheme not in (('https', 'http') if allow_http else ('https',))

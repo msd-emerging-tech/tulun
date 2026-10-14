@@ -42,6 +42,15 @@ endpoint with a conflicting API style is rejected. This adapter supports only
 OpenAI-compatible v1 APIs, not every Foundry model/API family. The configured
 `gpt-6-luna` deployment is operator-supplied; its live availability is not verified.
 
+## Inactive Gateway configuration
+
+When `AI_PROVIDER=foundry`, `AI_GATEWAY_BASE_URL` is not used or URL-validated.
+An old Gateway URL must not prevent Django initialization or migrations in
+Foundry mode. Gateway mode still validates its own URL and never falls back to
+Foundry. Clear the unused `AI_GATEWAY_BASE_URL`, `AI_GATEWAY_API_KEY` and
+`AI_GATEWAY_MODELS` bindings in Services & Configuration to avoid confusion and
+unnecessary resolution of an old protected reference.
+
 ## Store the actual key
 
 An operator must store the actual resource key under `approved-tulun-foundry` in

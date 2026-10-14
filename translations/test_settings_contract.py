@@ -101,6 +101,33 @@ class SettingsContractTests(SimpleTestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_foundry_ignores_inactive_gateway_url(self):
+        result = self.inspect_settings(
+            {
+                'AI_PROVIDER': 'foundry',
+                'AI_GATEWAY_BASE_URL': 'https://claude-sonnet-resource.services.ai.azure.com/openai/v1/responses',
+                'AZURE_FOUNDRY_BASE_URL': 'https://claude-sonnet-resource.services.ai.azure.com/openai/v1/responses',
+                'AZURE_FOUNDRY_API_STYLE': 'responses',
+                'AZURE_FOUNDRY_MODELS': 'gpt-6-luna',
+            },
+            'from tulun.settings import AI_PROVIDER, AZURE_FOUNDRY_BASE_URL, '
+            'AZURE_FOUNDRY_API_STYLE, AZURE_FOUNDRY_MODELS; '
+            'assert AI_PROVIDER == "foundry"; '
+            'assert AZURE_FOUNDRY_BASE_URL == "https://claude-sonnet-resource.services.ai.azure.com/openai/v1"; '
+            'assert AZURE_FOUNDRY_API_STYLE == "responses"; '
+            'assert AZURE_FOUNDRY_MODELS == ("gpt-6-luna",)',
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_active_gateway_still_rejects_responses_url(self):
+        result = self.inspect_settings({
+            'AI_PROVIDER': 'gateway',
+            'AI_GATEWAY_BASE_URL': 'https://claude-sonnet-resource.services.ai.azure.com/openai/v1/responses',
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('AI_GATEWAY_BASE_URL must be an approved URL ending in /v1.', result.stderr)
+        self.assertNotIn('contract-db-secret', result.stderr)
+
     def test_example_uses_supplied_endpoint_and_exact_deployment(self):
         from dotenv import dotenv_values
         example = dotenv_values(Path(__file__).resolve().parent.parent / '.env.example')
