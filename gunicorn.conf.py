@@ -10,7 +10,7 @@ def bounded(name, default, minimum, maximum):
 
 bind = '0.0.0.0:8000'
 worker_class = 'sync'
-workers = bounded('GUNICORN_WORKERS', 2, 1, 4)
+workers = bounded('GUNICORN_WORKERS', 1, 1, 4)
 timeout = bounded('GUNICORN_TIMEOUT_SECONDS', 75, 10, 120)
 if timeout <= int(os.environ.get('TULUN_TRANSLATION_TIMEOUT_SECONDS', 60)) + 10:
     raise ValueError('Gunicorn timeout must exceed translation deadline plus 10 seconds.')
