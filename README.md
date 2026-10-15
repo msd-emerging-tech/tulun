@@ -212,6 +212,9 @@ Compose file is not used by the platform.
 
 ### Worker memory budget
 
+For PDF segment callers, see [Frontend PDF integration](docs/frontend-pdf-integration.md)
+for concurrency, timeout, retry and failure-handling requirements.
+
 Gunicorn defaults to **one synchronous worker** for the manifest's **512 MiB**
 memory budget. On October 15, 2026, VM kernel logs confirmed repeated container
 cgroup OOM kills with the previous two-worker default, even while health checks

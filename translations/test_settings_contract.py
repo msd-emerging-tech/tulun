@@ -7,6 +7,22 @@ from django.test import SimpleTestCase
 
 
 class SettingsContractTests(SimpleTestCase):
+    def test_provider_timeout_defaults_to_30_seconds(self):
+        result = self.inspect_settings({},
+            'from tulun.settings import AI_GATEWAY_TIMEOUT_SECONDS; '
+            'assert AI_GATEWAY_TIMEOUT_SECONDS == 30')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_provider_timeout_can_be_overridden_within_bounds(self):
+        result = self.inspect_settings({'AI_GATEWAY_TIMEOUT_SECONDS': '15'},
+            'from tulun.settings import AI_GATEWAY_TIMEOUT_SECONDS; '
+            'assert AI_GATEWAY_TIMEOUT_SECONDS == 15')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for value in ('0', '31', 'invalid'):
+            with self.subTest(value=value):
+                result = self.inspect_settings({'AI_GATEWAY_TIMEOUT_SECONDS': value})
+                self.assertNotEqual(result.returncode, 0)
+
     def inspect_settings(self, changes, query='import tulun.settings'):
         environment = {
             key: value for key, value in os.environ.items()

@@ -101,12 +101,12 @@ admission/rate limits. Shared sandbox key is not production multi-tenant identit
 | AI_GATEWAY_ALLOW_INSECURE_HTTP | false; explicit exception for isolated fake Gateway/local or approved private-network HTTP. Never enable for an Internet credential path. |
 | TULUN_MAX_TEXT_LENGTH | 4000 characters; supported range 1–16000. |
 | TULUN_MAX_BODY_BYTES | 32768 bytes; supported range 1024–131072. |
-| AI_GATEWAY_TIMEOUT_SECONDS | 15 seconds per call for either provider; range 1–30, additionally capped by remaining total deadline. |
+| AI_GATEWAY_TIMEOUT_SECONDS | 30 seconds per call for either provider; range 1–30, additionally capped by remaining total deadline. Optional platform configuration reference in `prototype.yml`. |
 | TULUN_TRANSLATION_TIMEOUT_SECONDS | 60 seconds total model work deadline; range 5–90. CPU/DB work is finally bounded by Gunicorn/platform timeout. |
 | AI_GATEWAY_MAX_OUTPUT_TOKENS | 2048 per model call for either provider; range 16–4096, must fit the selected deployment/credential allowance. |
 | TULUN_MAX_PROMPT_CHARS | 24000 combined message characters; range 1000–64000. Includes DB glossary/examples/prompt. |
 | TULUN_MAX_RETRIEVED_SENTENCES | 5; range 0–10. DB config retrieval count must be within this limit. |
-| GUNICORN_WORKERS | 2 synchronous workers, hence at most 2 active translations/container; range 1–4. |
+| GUNICORN_WORKERS | 1 synchronous worker, hence at most 1 active translation/container; range 1–4. Additional workers require a measured memory budget. |
 | GUNICORN_TIMEOUT_SECONDS | 75; range 10–120 and greater than total translation deadline plus 10 seconds. |
 | DJANGO_DEBUG | Only effective in development; default false, never enabled in MSD. |
 | TULUN_SQLITE_PATH | Development-only SQLite path; default repository db.sqlite3. Not accepted as MSD persistence. |

@@ -39,7 +39,7 @@ Platform responsibilities:
    forwarding headers first. Forwarded Host is intentionally not trusted. Forward a
    safe `X-Request-ID` if available. Do not expose the container directly to the Internet.
 5. Enforce TLS, request-body/time limits and per-client rate/connection controls at
-   Caddy/platform; only two synchronous translation workers by default. The app has
+   Caddy/platform; only one synchronous translation worker by default. The app has
    bounded work but no distributed request-rate limiter or durable queue.
 6. Verify health, readiness, normal single-prefix routing, caller authentication,
    translation with an approved test Gateway credential, and database persistence.

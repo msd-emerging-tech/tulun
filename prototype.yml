@@ -29,6 +29,7 @@ services:
       - { key: DATABASE_URL, source: database_url }
       - { key: TULUN_API_KEY, source: secret }
       - { key: AI_PROVIDER, source: config }
+      - { key: AI_GATEWAY_TIMEOUT_SECONDS, source: config, required: false }
       - { key: AZURE_FOUNDRY_API_KEY, source: secret, required: false }
       - { key: AZURE_FOUNDRY_BASE_URL, source: config, required: false }
       - { key: AZURE_FOUNDRY_API_STYLE, source: config, required: false }
